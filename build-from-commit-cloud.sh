@@ -33,8 +33,8 @@ fi
 # Sanitize branch name
 SANITIZED_BRANCH=$(echo "$BRANCH_NAME" | tr '/' '-')
 
-# Single tag (per-commit)
-IMAGE_TAG="alexsanderperf/litellm:${SANITIZED_BRANCH}-${COMMIT_HASH}"
+# Single tag (per-commit) pushed to litellmperformancetesting/litellm
+IMAGE_TAG="litellmperformancetesting/litellm:${SANITIZED_BRANCH}-${COMMIT_HASH}"
 
 # Docker Build Cloud project
 DOCKER_BUILD_CLOUD_PROJECT="${DOCKER_BUILD_CLOUD_PROJECT:-berriai/litellm-oom-builds}"
@@ -89,6 +89,7 @@ setup_cloud_builder
 
 # Build and push using buildx + Docker Build Cloud
 docker buildx build \
+    --builder "$BUILDER_NAME" \
     --platform linux/amd64 \
     -f docker/Dockerfile.dev \
     -t "$IMAGE_TAG" \
