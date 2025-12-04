@@ -88,7 +88,7 @@ setup_builder || true
 # This will work with remote Docker hosts via DOCKER_HOST env var
 docker buildx build \
     --platform linux/amd64 \
-    -f docker/Dockerfile.nonroot \
+    -f docker/Dockerfile.non_root \
     -t "$IMAGE_TAG" \
     -t "$LATEST_TAG" \
     --push \
