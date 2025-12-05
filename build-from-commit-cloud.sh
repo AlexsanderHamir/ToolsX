@@ -11,10 +11,9 @@
 #   BUILD_TYPE=mytype ./build-from-commit-cloud.sh
 #   BUILD_TYPE=mytype ./build-from-commit-cloud.sh <commit-hash>
 #   DOCKER_BUILD_CLOUD_PROJECT=org/project ./build-from-commit-cloud.sh
-#   TRIGGER_RENDER_REDEPLOY=1 ./build-from-commit-cloud.sh
-#   BUILD_TYPE=mytype TRIGGER_RENDER_REDEPLOY=1 ./build-from-commit-cloud.sh
-#   BUILD_TYPE=mytype TRIGGER_RENDER_REDEPLOY=1 ./build-from-commit-cloud.sh <commit-hash>
-# Note: For Render redeployment, set RENDER_DEPLOY_URL in ~/.zshrc
+#   RENDER_DEPLOY_URL=https://api.render.com/deploy/xxx?key=yyy ./build-from-commit-cloud.sh
+#   BUILD_TYPE=mytype RENDER_DEPLOY_URL=https://api.render.com/deploy/xxx?key=yyy ./build-from-commit-cloud.sh
+#   BUILD_TYPE=mytype RENDER_DEPLOY_URL=https://api.render.com/deploy/xxx?key=yyy ./build-from-commit-cloud.sh <commit-hash>
 
 set -e  # Exit on error
 
@@ -159,7 +158,7 @@ echo "   - Builder name:  $BUILDER_NAME"
 if [ -n "$TARGET_COMMIT" ]; then
     echo "   - Building from commit: $COMMIT_HASH"
 fi
-if [ "${TRIGGER_RENDER_REDEPLOY:-0}" = "1" ] || [ "${TRIGGER_RENDER_REDEPLOY:-0}" = "true" ]; then
+if [ -n "${RENDER_DEPLOY_URL:-}" ]; then
     echo "   - Render redeployment: enabled"
 fi
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -217,19 +216,15 @@ docker buildx build \
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "✅ Docker Build Cloud build & push complete!"
 
-# Render redeployment (optional)
+# Render redeployment (optional - triggered automatically if RENDER_DEPLOY_URL is provided)
 # Temporarily disable exit-on-error for Render redeployment so it doesn't fail the build
 set +e
-if [ "${TRIGGER_RENDER_REDEPLOY:-0}" = "1" ] || [ "${TRIGGER_RENDER_REDEPLOY:-0}" = "true" ]; then
+if [ -n "${RENDER_DEPLOY_URL:-}" ]; then
     echo ""
     echo "🚀 Triggering Render redeployment..."
     
-    # Check if RENDER_DEPLOY_URL is set
-    if [ -z "${RENDER_DEPLOY_URL:-}" ]; then
-        echo "⚠️  Warning: RENDER_DEPLOY_URL environment variable is not set"
-        echo "   Set RENDER_DEPLOY_URL in your ~/.zshrc to enable Render redeployment"
-        echo "   Skipping Render redeployment..."
-    elif ! command -v curl >/dev/null 2>&1; then
+    # Check if curl is available
+    if ! command -v curl >/dev/null 2>&1; then
         echo "⚠️  Warning: curl not found, skipping Render redeployment"
         echo "   Install curl to enable automatic Render redeployment"
     else
