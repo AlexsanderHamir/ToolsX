@@ -12,6 +12,8 @@
 #   BUILD_TYPE=mytype ./build-from-commit-cloud.sh <commit-hash>
 #   DOCKER_BUILD_CLOUD_PROJECT=org/project ./build-from-commit-cloud.sh
 #   TRIGGER_RENDER_REDEPLOY=1 ./build-from-commit-cloud.sh
+#   BUILD_TYPE=mytype TRIGGER_RENDER_REDEPLOY=1 ./build-from-commit-cloud.sh
+#   BUILD_TYPE=mytype TRIGGER_RENDER_REDEPLOY=1 ./build-from-commit-cloud.sh <commit-hash>
 # Note: For Render redeployment, set RENDER_DEPLOY_URL in ~/.zshrc
 
 set -e  # Exit on error
