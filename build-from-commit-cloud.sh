@@ -19,11 +19,49 @@ TARGET_COMMIT="$1"
 
 echo "🔍 Checking git status..."
 
+# Initialize state tracking variables
+HAS_STASH=false
+RESTORE_DONE=false
+
 # Save current state
 ORIGINAL_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 ORIGINAL_COMMIT=$(git rev-parse HEAD)
 echo "📍 Current branch: $ORIGINAL_BRANCH"
 echo "📝 Current commit: $(git rev-parse --short=7 HEAD)"
+
+# Function to restore original state
+restore_state() {
+    # Only restore if we haven't already restored
+    if [ "$RESTORE_DONE" = true ]; then
+        return 0
+    fi
+    RESTORE_DONE=true
+    
+    echo ""
+    echo "🔄 Restoring original state..."
+    
+    # Only checkout if we switched commits and have the original branch info
+    if [ "${SKIP_CHECKOUT:-true}" = false ] && [ -n "${ORIGINAL_BRANCH:-}" ]; then
+        # Go back to original branch/commit
+        git checkout "$ORIGINAL_BRANCH" 2>/dev/null || git checkout "${ORIGINAL_COMMIT:-}" 2>/dev/null || true
+    fi
+    
+    # Restore stashed changes if any
+    if [ "${HAS_STASH:-false}" = true ]; then
+        echo "   ♻️  Restoring stashed changes..."
+        git stash pop 2>/dev/null || {
+            echo "   ⚠️  Warning: Could not restore stashed changes"
+            echo "   💡 You can manually restore with: git stash pop"
+        }
+        echo "   ✅ Original state restored"
+    else
+        echo "   ✅ No changes to restore"
+    fi
+}
+
+# Set trap to restore state on any exit (success, failure, or interrupt)
+# This ensures cleanup happens even if script is interrupted or errors occur
+trap restore_state EXIT ERR INT TERM
 
 # Determine if we need to checkout a specific commit
 if [ -n "$TARGET_COMMIT" ]; then
@@ -79,32 +117,6 @@ else
     echo "✅ No uncommitted changes detected"
     HAS_STASH=false
 fi
-
-# Function to restore original state
-restore_state() {
-    echo ""
-    echo "🔄 Restoring original state..."
-    
-    # Only checkout if we switched commits
-    if [ "$SKIP_CHECKOUT" = false ]; then
-        # Go back to original branch/commit
-        git checkout "$ORIGINAL_BRANCH" 2>/dev/null || git checkout "$ORIGINAL_COMMIT"
-    fi
-    
-    # Restore stashed changes if any
-    if [ "$HAS_STASH" = true ]; then
-        echo "   ♻️  Restoring stashed changes..."
-        git stash pop 2>/dev/null || {
-            echo "   ⚠️  Warning: Could not restore stashed changes"
-        }
-        echo "   ✅ Original state restored"
-    else
-        echo "   ✅ No changes to restore"
-    fi
-}
-
-# Set trap to restore state on exit (success or failure)
-trap restore_state EXIT
 
 # Checkout the target commit (if not already on it)
 if [ "$SKIP_CHECKOUT" = false ]; then
