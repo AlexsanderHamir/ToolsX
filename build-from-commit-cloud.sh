@@ -6,30 +6,117 @@
 # Default build type: default-build-type
 # Usage:
 #   ./build-from-commit-cloud.sh
+#   ./build-from-commit-cloud.sh <commit-hash>
 # Optional:
 #   BUILD_TYPE=mytype ./build-from-commit-cloud.sh
+#   BUILD_TYPE=mytype ./build-from-commit-cloud.sh <commit-hash>
 #   DOCKER_BUILD_CLOUD_PROJECT=org/project ./build-from-commit-cloud.sh
 
 set -e  # Exit on error
 
+# Check if commit hash is provided (optional)
+TARGET_COMMIT="$1"
+
 echo "🔍 Checking git status..."
 
-# Get current branch name
-BRANCH_NAME=$(git rev-parse --abbrev-ref HEAD)
-echo "📍 Current branch: $BRANCH_NAME"
+# Save current state
+ORIGINAL_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+ORIGINAL_COMMIT=$(git rev-parse HEAD)
+echo "📍 Current branch: $ORIGINAL_BRANCH"
+echo "📝 Current commit: $(git rev-parse --short=7 HEAD)"
 
-# Get short commit hash
-COMMIT_HASH=$(git rev-parse --short=7 HEAD)
-echo "📝 Last commit: $COMMIT_HASH"
+# Determine if we need to checkout a specific commit
+if [ -n "$TARGET_COMMIT" ]; then
+    # Validate target commit exists
+    if ! git cat-file -e "$TARGET_COMMIT" 2>/dev/null; then
+        echo "❌ Error: Commit '$TARGET_COMMIT' not found"
+        exit 1
+    fi
+    
+    # Get full commit hash for validation
+    FULL_COMMIT_HASH=$(git rev-parse "$TARGET_COMMIT")
+    SHORT_COMMIT_HASH=$(git rev-parse --short=7 "$TARGET_COMMIT")
+    echo "🎯 Target commit: $SHORT_COMMIT_HASH"
+    
+    # Check if we're already on the target commit
+    if [ "$ORIGINAL_COMMIT" = "$FULL_COMMIT_HASH" ]; then
+        echo "ℹ️  Already on target commit, proceeding with build..."
+        SKIP_CHECKOUT=true
+        COMMIT_HASH="$SHORT_COMMIT_HASH"
+        BRANCH_NAME="$ORIGINAL_BRANCH"
+    else
+        SKIP_CHECKOUT=false
+        COMMIT_HASH="$SHORT_COMMIT_HASH"
+    fi
+else
+    # No commit specified, build from current HEAD
+    COMMIT_HASH=$(git rev-parse --short=7 HEAD)
+    BRANCH_NAME="$ORIGINAL_BRANCH"
+    SKIP_CHECKOUT=true
+    echo "📝 Building from current commit: $COMMIT_HASH"
+fi
 
-# Check for uncommitted changes
-if ! git diff-index --quiet HEAD --; then
-    echo "💾 Saving uncommitted changes..."
+# Check for any changes (staged or unstaged)
+HAS_CHANGES=false
+
+# Check if there are any changes at all
+if ! git diff-index --quiet HEAD -- || ! git diff --cached --quiet; then
     HAS_CHANGES=true
-    git stash push -u -m "Auto-stash before Docker Build Cloud build at $(date)"
+fi
+
+# Stage and stash all changes (staged and unstaged)
+if [ "$HAS_CHANGES" = true ]; then
+    echo "💾 Staging all changes (staged and unstaged)..."
+    
+    # Stage everything (this will stage both previously staged and unstaged changes)
+    git add -A
+    
+    # Now stash everything (including the staged changes)
+    echo "   📦 Stashing all staged changes..."
+    git stash push --include-untracked -m "Auto-stash before Docker Build Cloud build at $(date)"
+    HAS_STASH=true
 else
     echo "✅ No uncommitted changes detected"
-    HAS_CHANGES=false
+    HAS_STASH=false
+fi
+
+# Function to restore original state
+restore_state() {
+    echo ""
+    echo "🔄 Restoring original state..."
+    
+    # Only checkout if we switched commits
+    if [ "$SKIP_CHECKOUT" = false ]; then
+        # Go back to original branch/commit
+        git checkout "$ORIGINAL_BRANCH" 2>/dev/null || git checkout "$ORIGINAL_COMMIT"
+    fi
+    
+    # Restore stashed changes if any
+    if [ "$HAS_STASH" = true ]; then
+        echo "   ♻️  Restoring stashed changes..."
+        git stash pop 2>/dev/null || {
+            echo "   ⚠️  Warning: Could not restore stashed changes"
+        }
+        echo "   ✅ Original state restored"
+    else
+        echo "   ✅ No changes to restore"
+    fi
+}
+
+# Set trap to restore state on exit (success or failure)
+trap restore_state EXIT
+
+# Checkout the target commit (if not already on it)
+if [ "$SKIP_CHECKOUT" = false ]; then
+    echo "🔄 Checking out target commit: $COMMIT_HASH"
+    git checkout "$FULL_COMMIT_HASH"
+    
+    # Get branch name from commit (or use commit hash as fallback)
+    COMMIT_BRANCH=$(git branch -r --contains "$FULL_COMMIT_HASH" 2>/dev/null | head -n1 | sed 's/^[[:space:]]*origin\///' | sed 's/^[[:space:]]*//' | cut -d' ' -f1)
+    if [ -z "$COMMIT_BRANCH" ] || [ "$COMMIT_BRANCH" = "" ]; then
+        COMMIT_BRANCH="detached-$COMMIT_HASH"
+    fi
+    BRANCH_NAME="$COMMIT_BRANCH"
 fi
 
 # Sanitize branch name
@@ -53,6 +140,9 @@ echo "     • $LATEST_TAG"
 echo "   - Build type: $BUILD_TYPE"
 echo "   - Cloud project: $DOCKER_BUILD_CLOUD_PROJECT"
 echo "   - Builder name:  $BUILDER_NAME"
+if [ -n "$TARGET_COMMIT" ]; then
+    echo "   - Building from commit: $COMMIT_HASH"
+fi
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 # Basic docker / buildx sanity checks
@@ -108,12 +198,11 @@ docker buildx build \
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "✅ Docker Build Cloud build & push complete!"
 
-# Restore stashed changes
-if [ "$HAS_CHANGES" = true ]; then
-    echo "♻️  Restoring uncommitted changes..."
-    git stash pop
-    echo "✅ Changes restored"
-fi
+# Disable trap since we're about to restore state explicitly
+trap - EXIT
+
+# Restore state
+restore_state
 
 echo ""
 echo "📦 Images available at:"
