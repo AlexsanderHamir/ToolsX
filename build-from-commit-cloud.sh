@@ -2,7 +2,7 @@
 
 # Script to build & push Docker image using Docker Build Cloud (buildx cloud driver)
 # Requires: docker CLI logged in and Docker Build Cloud project access
-# Default cloud project: berriai/litellm-oom-builds
+# Default cloud project: berriai/litellm-all-build-types
 # Default build type: default-build-type
 # Usage:
 #   ./build-from-commit-cloud.sh
@@ -43,7 +43,7 @@ IMAGE_TAG="litellmperformancetesting/litellm:${BUILD_TYPE}-${SANITIZED_BRANCH}-$
 LATEST_TAG="litellmperformancetesting/litellm:${BUILD_TYPE}-latest"
 
 # Docker Build Cloud project
-DOCKER_BUILD_CLOUD_PROJECT="${DOCKER_BUILD_CLOUD_PROJECT:-berriai/litellm-oom-builds}"
+DOCKER_BUILD_CLOUD_PROJECT="${DOCKER_BUILD_CLOUD_PROJECT:-berriai/litellm-all-build-types}"
 BUILDER_NAME="cloud-$(echo "$DOCKER_BUILD_CLOUD_PROJECT" | tr '/' '-')"
 
 echo "🐳 Building & pushing Docker image via Docker Build Cloud:"
