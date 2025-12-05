@@ -3,9 +3,11 @@
 # Script to build & push Docker image using Docker Build Cloud (buildx cloud driver)
 # Requires: docker CLI logged in and Docker Build Cloud project access
 # Default cloud project: berriai/litellm-oom-builds
+# Default build type: default-build-type
 # Usage:
 #   ./build-from-commit-cloud.sh
 # Optional:
+#   BUILD_TYPE=mytype ./build-from-commit-cloud.sh
 #   DOCKER_BUILD_CLOUD_PROJECT=org/project ./build-from-commit-cloud.sh
 
 set -e  # Exit on error
@@ -33,16 +35,22 @@ fi
 # Sanitize branch name
 SANITIZED_BRANCH=$(echo "$BRANCH_NAME" | tr '/' '-')
 
-# Single tag (per-commit) pushed to litellmperformancetesting/litellm
-IMAGE_TAG="litellmperformancetesting/litellm:${SANITIZED_BRANCH}-${COMMIT_HASH}"
+# Build type (default: default-build-type)
+BUILD_TYPE="${BUILD_TYPE:-default-build-type}"
+
+# Tags pushed to litellmperformancetesting/litellm
+IMAGE_TAG="litellmperformancetesting/litellm:${BUILD_TYPE}-${SANITIZED_BRANCH}-${COMMIT_HASH}"
+LATEST_TAG="litellmperformancetesting/litellm:${BUILD_TYPE}-latest"
 
 # Docker Build Cloud project
 DOCKER_BUILD_CLOUD_PROJECT="${DOCKER_BUILD_CLOUD_PROJECT:-berriai/litellm-oom-builds}"
 BUILDER_NAME="cloud-$(echo "$DOCKER_BUILD_CLOUD_PROJECT" | tr '/' '-')"
 
 echo "🐳 Building & pushing Docker image via Docker Build Cloud:"
-echo "   - Image tag:"
+echo "   - Image tags:"
 echo "     • $IMAGE_TAG"
+echo "     • $LATEST_TAG"
+echo "   - Build type: $BUILD_TYPE"
 echo "   - Cloud project: $DOCKER_BUILD_CLOUD_PROJECT"
 echo "   - Builder name:  $BUILDER_NAME"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -93,6 +101,7 @@ docker buildx build \
     --platform linux/amd64 \
     -f docker/Dockerfile.dev \
     -t "$IMAGE_TAG" \
+    -t "$LATEST_TAG" \
     --push \
     .
 
@@ -109,5 +118,6 @@ fi
 echo ""
 echo "📦 Images available at:"
 echo "   - $IMAGE_TAG"
+echo "   - $LATEST_TAG"
 
 
