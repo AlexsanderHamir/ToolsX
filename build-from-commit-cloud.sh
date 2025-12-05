@@ -11,6 +11,8 @@
 #   BUILD_TYPE=mytype ./build-from-commit-cloud.sh
 #   BUILD_TYPE=mytype ./build-from-commit-cloud.sh <commit-hash>
 #   DOCKER_BUILD_CLOUD_PROJECT=org/project ./build-from-commit-cloud.sh
+#   TRIGGER_RENDER_REDEPLOY=1 ./build-from-commit-cloud.sh
+# Note: For Render redeployment, set RENDER_DEPLOY_URL in ~/.zshrc
 
 set -e  # Exit on error
 
@@ -155,6 +157,9 @@ echo "   - Builder name:  $BUILDER_NAME"
 if [ -n "$TARGET_COMMIT" ]; then
     echo "   - Building from commit: $COMMIT_HASH"
 fi
+if [ "${TRIGGER_RENDER_REDEPLOY:-0}" = "1" ] || [ "${TRIGGER_RENDER_REDEPLOY:-0}" = "true" ]; then
+    echo "   - Render redeployment: enabled"
+fi
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 # Basic docker / buildx sanity checks
@@ -209,6 +214,53 @@ docker buildx build \
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "✅ Docker Build Cloud build & push complete!"
+
+# Render redeployment (optional)
+# Temporarily disable exit-on-error for Render redeployment so it doesn't fail the build
+set +e
+if [ "${TRIGGER_RENDER_REDEPLOY:-0}" = "1" ] || [ "${TRIGGER_RENDER_REDEPLOY:-0}" = "true" ]; then
+    echo ""
+    echo "🚀 Triggering Render redeployment..."
+    
+    # Check if RENDER_DEPLOY_URL is set
+    if [ -z "${RENDER_DEPLOY_URL:-}" ]; then
+        echo "⚠️  Warning: RENDER_DEPLOY_URL environment variable is not set"
+        echo "   Set RENDER_DEPLOY_URL in your ~/.zshrc to enable Render redeployment"
+        echo "   Skipping Render redeployment..."
+    elif ! command -v curl >/dev/null 2>&1; then
+        echo "⚠️  Warning: curl not found, skipping Render redeployment"
+        echo "   Install curl to enable automatic Render redeployment"
+    else
+        # Trigger Render redeployment
+        RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$RENDER_DEPLOY_URL" 2>&1)
+        CURL_EXIT_CODE=$?
+        
+        if [ $CURL_EXIT_CODE -ne 0 ]; then
+            echo "⚠️  Warning: Failed to trigger Render redeployment (curl error: $CURL_EXIT_CODE)"
+            echo "   Continuing anyway..."
+        else
+            HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+            BODY=$(echo "$RESPONSE" | sed '$d')
+            
+            if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ]; then
+                echo "✅ Render redeployment triggered successfully"
+                if [ -n "$BODY" ]; then
+                    DEPLOY_ID=$(echo "$BODY" | grep -o '"id":"[^"]*"' | cut -d'"' -f4 || true)
+                    if [ -n "$DEPLOY_ID" ]; then
+                        echo "   Deployment ID: $DEPLOY_ID"
+                    fi
+                fi
+            else
+                echo "⚠️  Warning: Render redeployment returned HTTP $HTTP_CODE"
+                if [ -n "$BODY" ]; then
+                    echo "   Response: $BODY"
+                fi
+                echo "   Continuing anyway..."
+            fi
+        fi
+    fi
+fi
+set -e
 
 # Disable trap since we're about to restore state explicitly
 trap - EXIT
