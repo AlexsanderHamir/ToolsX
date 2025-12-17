@@ -1,5 +1,6 @@
 # Tools
 
+<<<<<<< HEAD
 This repository contains scripts to build and push Docker images. Both Bash (`.sh`) and PowerShell (`.ps1`) versions are available for cross-platform compatibility.
 
 ## PowerShell Scripts (Windows)
@@ -93,6 +94,9 @@ $env:RENDER_DEPLOY_URL="https://api.render.com/deploy/xxx?key=yyy"
 ## Bash Scripts (Linux/macOS)
 
 ### `build-from-commit.sh`
+=======
+## `build-from-commit.sh`
+>>>>>>> 28915d5e94327401293cf96da332b452b5520cb9
 
 Builds and pushes Docker images tagged with git branch and commit hash.
 
